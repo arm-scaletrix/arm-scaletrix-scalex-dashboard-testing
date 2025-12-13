@@ -1185,15 +1185,15 @@ function updateCreativePerfTilesFromAPI(apiData) {
 
         if (type === 'ctr' || type === 'engagement') {
             // % value + percentage-points delta
-            const current = Number(metricData.currentPercent.toFixed(1));
-            const deltaPoints = Number(metricData.deltaPoints.toFixed(1));
+            const current = Number(metricData.currentPercent).toFixed(1);
+            const deltaPoints = Number(metricData.deltaPoints).toFixed(1);
 
             valueEl.textContent = `${current.toLocaleString()}%`;
             deltaEl.textContent = `${arrow} ${deltaPoints.toLocaleString()}pp vs prev`;
         } else if (type === 'cpc') {
             // Currency value + % delta
-            const current = Number(metricData.currentValue.toFixed(1));
-            const deltaPercent = Number(metricData.deltaPercent.toFixed(1));
+            const current = Number(metricData.currentValue).toFixed(1);
+            const deltaPercent = Number(metricData.deltaPercent).toFixed(1);
 
             // Always show as ₹; backend already decided currency
             valueEl.textContent = `₹ ${current.toLocaleString()}`;
