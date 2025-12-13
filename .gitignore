@@ -1,0 +1,25 @@
+# Ignore everything
+*
+
+# Allow these root files
+!.gitignore
+!README.md
+!index.html
+!dashboard.html
+!register.html
+
+# Allow static directories
+!static/
+!static/css/
+!static/js/
+!static/img/
+!static/icons/
+
+# Allow specific files
+!static/css/styles.css
+!static/css/tailwind.css
+!static/icons/favicon.ico
+!static/img/scaletrix-logo.png
+!static/js/dashboard_chart_api.js
+!static/js/dashboard_charts.js
+!static/js/dashboard_layout.js
