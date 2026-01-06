@@ -708,8 +708,8 @@ async function exportDashboard(format) {
     });
 
     // Google Ads connect button placeholder
-    if (googleBtn) {
-        googleBtn.addEventListener('click', () => {
+    if (googleLink) {
+        googleLink.addEventListener('click', () => {
             console.log('TODO: trigger Google Ads OAuth popup for this client');
             // TODO: Implement Google Ads OAuth flow
             // Later: redirect to /oauth/google?client_id=...
@@ -718,8 +718,8 @@ async function exportDashboard(format) {
     }
 
     // Meta Ads connect button placeholder
-    if (metaBtn) {
-        metaBtn.addEventListener('click', () => {
+    if (metaLink) {
+        metaLink.addEventListener('click', () => {
             console.log('TODO: trigger Meta Ads OAuth popup for this client');
             // TODO: Implement Meta Ads OAuth flow
             // Later: redirect to /oauth/meta?client_id=...
