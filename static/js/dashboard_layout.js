@@ -73,7 +73,8 @@
  * ===========================================================================
  * v1.0 - 2025-12-11 - Initial refactored version with proper organization
  * 
- * ========================================================================= */
+ * ========================================================================== */
+
 
 
 
@@ -84,7 +85,7 @@
  * Handles the collapsible filter section in the header.
  * Allows users to show/hide filter options.
  * 
- * ========================================================================= */
+ * ========================================================================== */
 
 /**
  * 1.1 - Toggle filter section visibility
@@ -136,7 +137,7 @@ window.toggleFilterSection = function () {
  * Uses moment.js for date manipulation and jQuery DateRangePicker for UI.
  * Stores state in sessionStorage for persistence across page reloads.
  * 
- * ========================================================================= */
+ * ========================================================================== */
 
 /**
  * 2.1 - Date Filter Configuration
@@ -341,7 +342,7 @@ window.storeDateRange = storeDateRange;
  * Handles user interactions with filter controls.
  * Provides feedback to user for filter actions.
  * 
- * ========================================================================= */
+ * ========================================================================== */
 
 /**
  * 3.1 - Show notification message to user
@@ -436,7 +437,7 @@ function handleFilterReset() {
  * Uses jsPDF library for PDF generation.
  * Adds margins and background color for professional appearance.
  * 
- * ========================================================================= */
+ * ========================================================================== */
 
 /**
  * 4.1 - Export dashboard to PNG or PDF
@@ -572,7 +573,7 @@ async function exportDashboard(format) {
  * Displays client details and provides OAuth connection options.
  * Allows users to connect Google Ads and Meta Ads accounts.
  * 
- * ========================================================================= */
+ * ========================================================================== */
 
 /**
  * 5.1 - Client Modal Initialization (IIFE)
@@ -594,14 +595,11 @@ async function exportDashboard(format) {
     const clientIdValueEl = document.getElementById('client-modal-client-id');
     const clientEmailEl = document.getElementById('client-modal-client-email');
 
-    // NOTE: Legacy button-based markup (kept for backward compatibility).
-    // In the current dashboard HTML, we use <a> anchors (#google-ads-link, #meta-ads-link).
     const googleBtn = document.getElementById('google-ads-connect');
     const metaBtn = document.getElementById('meta-ads-connect');
     const googleLink = document.getElementById('google-ads-link');
     const metaLink = document.getElementById('meta-ads-link');
 
-    
     // Safety guard: exit if required elements don't exist
     if (!clientIdDisplay || !modalBackdrop) {
         return;
@@ -657,23 +655,25 @@ async function exportDashboard(format) {
         document.body.classList.add('client-modal-open');
 
         /**
-         * ✅ Phase 2: refresh Ads integration status
+         * Phase 2: refresh Ads integration status
          * Hook: when profile popup opens, refresh status
          * Call this when profile modal becomes visible
          */
-        // Show loader while we fetch the latest connection state
-        if (typeof showGlobalLoader === 'function') {
-            showGlobalLoader();
+        // Show loader first
+        showGlobalLoader();
+
+        try {
+            // Fetch + update UI BEFORE opening the modal
+            // loadIntegrationStatus is async already
+            await window.loadIntegrationStatus();
+        } catch (err) {
+            console.error("Phase2: loadIntegrationStatus failed:", err);
+            // Optional: you can still open modal even if status fails
+        } finally {
+            // Hide loader
+            hideGlobalLoader();
         }
 
-        // IMPORTANT: do not block modal opening; refresh status asynchronously
-        Promise.resolve(loadIntegrationStatus())
-            .catch((err) => console.error("Phase2: loadIntegrationStatus failed:", err))
-            .finally(() => {
-                if (typeof hideGlobalLoader === 'function') {
-                    hideGlobalLoader();
-                }
-            });
     }
 
     /**
@@ -708,63 +708,20 @@ async function exportDashboard(format) {
     });
 
     // Google Ads connect button placeholder
-    if (googleLink) {
-        googleLink.addEventListener('click', () => {
+    if (googleBtn) {
+        googleBtn.addEventListener('click', () => {
             console.log('TODO: trigger Google Ads OAuth popup for this client');
             // TODO: Implement Google Ads OAuth flow
             // Later: redirect to /oauth/google?client_id=...
-            openOAuthPopupAndPoll(googleLink, "google_ads");
         });
     }
 
     // Meta Ads connect button placeholder
-    if (metaLink) {
-        metaLink.addEventListener('click', () => {
+    if (metaBtn) {
+        metaBtn.addEventListener('click', () => {
             console.log('TODO: trigger Meta Ads OAuth popup for this client');
             // TODO: Implement Meta Ads OAuth flow
             // Later: redirect to /oauth/meta?client_id=...
-            openOAuthPopupAndPoll(metaLink, "meta_ads");
-        });
-    }
-
-    /**
-     * 5.4 - Phase 2 (Hybrid): Open OAuth in popup + poll for status
-     * 
-     * Why this exists:
-     * - Because we use rel="noopener noreferrer" for security, window.opener may be null.
-     * - So we use a backend-driven status poll while the popup is open.
-     * 
-     * Result:
-     * - User clicks "Connect" -> popup opens
-     * - Dashboard keeps the profile modal open
-     * - Dashboard polls /integrations/status until it becomes "active"
-     * - UI updates in-place (button text + disabled state)
-     */
-    if (googleLink && !googleLink.dataset.hybridBound) {
-        googleLink.dataset.hybridBound = "1";
-        googleLink.addEventListener("click", (e) => {
-            // If already connected, block navigation completely
-            if (googleLink.classList.contains("connected")) {
-                e.preventDefault();
-                return;
-            }
-
-            e.preventDefault();
-            openOAuthPopupAndPoll(googleLink, "google_ads");
-        });
-    }
-
-    if (metaLink && !metaLink.dataset.hybridBound) {
-        metaLink.dataset.hybridBound = "1";
-        metaLink.addEventListener("click", (e) => {
-            // If already connected, block navigation completely
-            if (metaLink.classList.contains("connected")) {
-                e.preventDefault();
-                return;
-            }
-
-            e.preventDefault();
-            openOAuthPopupAndPoll(metaLink, "meta_ads");
         });
     }
 })();
@@ -789,7 +746,7 @@ async function exportDashboard(format) {
  * 7. Default view handlers
  * 8. Initial data rendering
  * 
- * ========================================================================= */
+ * ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
     /**
@@ -1120,43 +1077,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // }
 });
 
-
 /******************************************************************
- * Phase 2 – Ads Integrations Status Handling (ANCHOR + HYBRID)
+ * Phase 2 – Ads Integrations Status Handling (FRESH + FIXED)
  * ---------------------------------------------------------------
- * What we do in Phase 2:
- * 1) When profile modal opens -> call /api/v1/integrations/status
- * 2) Update the two <a> anchors:
- *      - #google-ads-link
- *      - #meta-ads-link
- * 3) When user clicks Connect/Reconnect:
- *      - Open OAuth in a popup
- *      - Poll /integrations/status while popup is open
- *      - Once status becomes active -> update UI + auto close popup
- *
- * Why hybrid polling:
- * - For security we use rel="noopener noreferrer", so window.opener may be null.
- * - postMessage becomes unreliable in that case.
- * - Polling backend status is the simplest + most reliable approach here.
+ * - Fetch integration status from backend
+ * - Update Profile popup UI (anchors: #google-ads-link, #meta-ads-link)
+ * - Listen for OAuth completion from popup window
  ******************************************************************/
 
-/**
- * Backend base URL (Cloud Run)
- * NOTE: If you move environments, update only this constant.
- */
+// Backend base URL (Cloud Run)
 const ADS_CONNECTOR_BASE_URL = "https://scalex-ads-connector-ohkoqzgrzq-el.a.run.app";
 
-/**
- * Optional: The connector origin (useful if we ever re-enable postMessage)
- * Currently unused in Hybrid polling, but kept for future hardening.
- */
+// Security: only accept postMessage from this origin
 const ADS_CONNECTOR_ORIGIN = new URL(ADS_CONNECTOR_BASE_URL).origin;
 
-/**
- * Global loader helpers (optional)
- * Requires a #loader element in HTML.
- * If it doesn't exist, these functions safely no-op.
- */
 function showGlobalLoader() {
     const loaderEl = document.getElementById("loader");
     if (loaderEl) loaderEl.classList.remove("hidden");
@@ -1187,53 +1121,50 @@ function getActiveClientId() {
 /**
  * Update a single platform anchor based on connection status.
  * This is designed for <a> tags (not <button>).
- *
- * Status object shape expected:
- * { connected: boolean, status: "active"|"disconnected"|... }
  */
 function applyPlatformUI(anchorEl, platformKey, statusObj) {
     if (!anchorEl) return;
 
-    // Reset state
+    // Reset
     anchorEl.classList.remove("connected", "reconnect");
     anchorEl.removeAttribute("aria-disabled");
 
     const connected = Boolean(statusObj?.connected);
-    const state = (statusObj?.status || "").toLowerCase();
+    const state = (statusObj?.status || "").toLowerCase(); // active / disconnected / etc.
 
-    // Human label
+    // Default label (connect)
     const label = platformKey === "google_ads" ? "Google Ads" : "Meta Ads";
 
-    // Not connected -> Connect
     if (!connected) {
         anchorEl.textContent = `Connect ${label}`;
+        // Anchor remains clickable (href is already set by openClientModal)
         return;
     }
 
-    // Connected + Active -> disable
     if (state === "active") {
         anchorEl.textContent = `${label} Connected ✅`;
         anchorEl.classList.add("connected");
         anchorEl.setAttribute("aria-disabled", "true");
-        // CSS should set pointer-events:none on .connected,
-        // but we also block clicks in JS for safety.
+        // CSS handles pointer-events: none for .connected (already in styles.css)
         return;
     }
 
-    // Connected but not active -> allow reconnect
+    // Anything not active but connected -> reconnect state
     anchorEl.textContent = `Reconnect ${label} ⚠️`;
     anchorEl.classList.add("reconnect");
+    // Keep clickable so user can re-run OAuth
 }
 
 /**
- * Update the profile modal UI based on backend response.
- * Expected payload:
+ * Update the popup UI based on backend response.
+ * Expected structure:
  * {
  *   google_ads: { connected: bool, status: "active"|"disconnected"|... },
  *   meta_ads:   { connected: bool, status: "active"|"disconnected"|... }
  * }
  */
 function updateIntegrationUI(payload) {
+    // The two anchors in YOUR HTML
     const googleLink = document.getElementById("google-ads-link");
     const metaLink = document.getElementById("meta-ads-link");
 
@@ -1243,7 +1174,9 @@ function updateIntegrationUI(payload) {
 
 /**
  * Fetch integration status from backend and apply to UI.
- * Safe to call multiple times.
+ * This can be called:
+ * - When modal opens (you already call loadIntegrationStatus() there)
+ * - When OAuth popup reports completion (postMessage)
  */
 async function loadIntegrationStatus() {
     try {
@@ -1268,70 +1201,8 @@ async function loadIntegrationStatus() {
     }
 }
 
-// Expose for other modules / IIFE usage
+// Expose for openClientModal() call (since it’s inside an IIFE above)
 window.loadIntegrationStatus = loadIntegrationStatus;
-
-/**
- * Phase 2 (Hybrid): Poll integration status only after user starts OAuth.
- * - Stops when popup closes OR connection becomes active OR timeout hits.
- */
-function startIntegrationPolling(platformKey, popupRef) {
-    const MAX_MS = 120_000;      // stop after 120 seconds
-    const INTERVAL_MS = 2000;   // poll every 2 seconds
-    const startTs = Date.now();
-
-    const timer = setInterval(async () => {
-        try {
-            // Stop if popup is gone
-            if (!popupRef || popupRef.closed) {
-                clearInterval(timer);
-                return;
-            }
-
-            // Stop after timeout
-            if (Date.now() - startTs > MAX_MS) {
-                clearInterval(timer);
-                return;
-            }
-
-            // Refresh status from backend
-            await loadIntegrationStatus();
-
-            // If now connected, stop polling + close popup (optional)
-            const el = platformKey === "google_ads"
-                ? document.getElementById("google-ads-link")
-                : document.getElementById("meta-ads-link");
-
-            if (el && el.classList.contains("connected")) {
-                clearInterval(timer);
-
-                // Optional: close popup automatically once connected
-                try { popupRef.close(); } catch (e) {}
-            }
-        } catch (e) {
-            // Keep polling even if one call fails temporarily
-        }
-    }, INTERVAL_MS);
-}
-
-/**
- * Opens OAuth popup and starts polling.
- * Works even when rel="noopener noreferrer" is present, because we are not using window.opener.
- */
-function openOAuthPopupAndPoll(linkEl, platformKey) {
-    if (!linkEl || !linkEl.href) return;
-
-    // If already connected, do nothing
-    if (linkEl.classList.contains("connected")) return;
-
-    // Open a popup window (tune size if needed)
-    const name = platformKey === "google_ads" ? "scalex_google_oauth" : "scalex_meta_oauth";
-    const features = "width=520,height=720,noopener,noreferrer";
-    const popup = window.open(linkEl.href, name, features);
-
-    // Start polling while popup is open
-    startIntegrationPolling(platformKey, popup);
-}
 
 
 
@@ -1344,4 +1215,4 @@ function openOAuthPopupAndPoll(linkEl, platformKey) {
  * For chart rendering logic, see: dashboard_charts.js
  * For API communication, see: dashboard_chart_api.js
  * 
- * ========================================================================= */
+ * ========================================================================== */
