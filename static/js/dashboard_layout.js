@@ -1211,12 +1211,20 @@ window.loadIntegrationStatus = loadIntegrationStatus;
  */
 window.addEventListener("message", function (event) {
     // Security: accept only from Ads Connector origin
-    if (event.origin !== ADS_CONNECTOR_ORIGIN) return;
+    console.log("MESSAGE EVENT:", event.origin, event.data);
+    if (event.origin !== ADS_CONNECTOR_ORIGIN) {
+        console.warn("Rejected origin:", event.origin, "expected:", ADS_CONNECTOR_ORIGIN);
+        return;
+    } 
 
     const msg = event.data;
-    if (!msg || msg.type !== "SCALEX_OAUTH_DONE") return;
+    if (!msg || msg.type !== "SCALEX_OAUTH_DONE") {
+        console.warn("Rejected data:", msg);
+        return;
+    }
 
     // Refresh status immediately (modal can remain open)
+    console.log("Accepted oauth_done message. Refreshing status...");
     loadIntegrationStatus();
 });
 
