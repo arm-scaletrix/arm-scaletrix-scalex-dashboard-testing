@@ -1063,107 +1063,138 @@ document.addEventListener('DOMContentLoaded', () => {
     // }
 });
 
-
 /******************************************************************
- * Phase 2 – Ads Integrations Status Handling
+ * Phase 2 – Ads Integrations Status Handling (FRESH + FIXED)
  * ---------------------------------------------------------------
  * - Fetch integration status from backend
- * - Update Profile popup UI
+ * - Update Profile popup UI (anchors: #google-ads-link, #meta-ads-link)
  * - Listen for OAuth completion from popup window
  ******************************************************************/
 
-// CONFIG – update this if backend base URL changes
-const ADS_CONNECTOR_BASE_URL = "https://scalex-ads-connector-ohkoqzgrzq-el.a.run.app"; 
+// Backend base URL (Cloud Run)
+const ADS_CONNECTOR_BASE_URL = "https://scalex-ads-connector-ohkoqzgrzq-el.a.run.app";
 
-// Client ID (must already be known in dashboard context)
-const SCALEX_CLIENT_ID = document.getElementById('client-id-display').textContent.trim() || "";
-
-// Button elements (adjust IDs if needed)
-const googleBtn = document.getElementById("connect-google-ads");
-const metaBtn = document.getElementById("connect-meta-ads");
+// Security: only accept postMessage from this origin
+const ADS_CONNECTOR_ORIGIN = new URL(ADS_CONNECTOR_BASE_URL).origin;
 
 /**
- * Fetch integration status from backend (Phase 2 endpoint)
+ * Get the active client_id.
+ * Priority:
+ * 1) Modal field (#client-modal-client-id) if present (popup open)
+ * 2) Header field (#client-id-display)
+ */
+function getActiveClientId() {
+    const modalClientEl = document.getElementById("client-modal-client-id");
+    const headerClientEl = document.getElementById("client-id-display");
+
+    const modalClientId = (modalClientEl?.textContent || "").trim();
+    if (modalClientId && modalClientId !== "--") return modalClientId;
+
+    const headerClientId = (headerClientEl?.textContent || "").trim();
+    return headerClientId || "";
+}
+
+/**
+ * Update a single platform anchor based on connection status.
+ * This is designed for <a> tags (not <button>).
+ */
+function applyPlatformUI(anchorEl, platformKey, statusObj) {
+    if (!anchorEl) return;
+
+    // Reset
+    anchorEl.classList.remove("connected", "reconnect");
+    anchorEl.removeAttribute("aria-disabled");
+
+    const connected = Boolean(statusObj?.connected);
+    const state = (statusObj?.status || "").toLowerCase(); // active / disconnected / etc.
+
+    // Default label (connect)
+    const label = platformKey === "google_ads" ? "Google Ads" : "Meta Ads";
+
+    if (!connected) {
+        anchorEl.textContent = `Connect ${label}`;
+        // Anchor remains clickable (href is already set by openClientModal)
+        return;
+    }
+
+    if (state === "active") {
+        anchorEl.textContent = `${label} Connected ✅`;
+        anchorEl.classList.add("connected");
+        anchorEl.setAttribute("aria-disabled", "true");
+        // CSS handles pointer-events: none for .connected (already in styles.css)
+        return;
+    }
+
+    // Anything not active but connected -> reconnect state
+    anchorEl.textContent = `Reconnect ${label} ⚠️`;
+    anchorEl.classList.add("reconnect");
+    // Keep clickable so user can re-run OAuth
+}
+
+/**
+ * Update the popup UI based on backend response.
+ * Expected structure:
+ * {
+ *   google_ads: { connected: bool, status: "active"|"disconnected"|... },
+ *   meta_ads:   { connected: bool, status: "active"|"disconnected"|... }
+ * }
+ */
+function updateIntegrationUI(payload) {
+    // The two anchors in YOUR HTML
+    const googleLink = document.getElementById("google-ads-link");
+    const metaLink = document.getElementById("meta-ads-link");
+
+    applyPlatformUI(googleLink, "google_ads", payload?.google_ads);
+    applyPlatformUI(metaLink, "meta_ads", payload?.meta_ads);
+}
+
+/**
+ * Fetch integration status from backend and apply to UI.
+ * This can be called:
+ * - When modal opens (you already call loadIntegrationStatus() there)
+ * - When OAuth popup reports completion (postMessage)
  */
 async function loadIntegrationStatus() {
     try {
-        const url = `${ADS_CONNECTOR_BASE_URL}/api/v1/integrations/status?client_id=${encodeURIComponent(SCALEX_CLIENT_ID)}`;
-        const res = await fetch(url, { credentials: "include" });
+        const clientId = getActiveClientId();
+        if (!clientId) {
+            console.warn("Phase2: client_id missing; cannot fetch integration status.");
+            return;
+        }
+
+        const url = `${ADS_CONNECTOR_BASE_URL}/api/v1/integrations/status?client_id=${encodeURIComponent(clientId)}`;
+        const res = await fetch(url);
 
         if (!res.ok) {
-            console.warn("Failed to load integrations status");
+            console.warn("Phase2: failed to load integrations status:", res.status);
             return;
         }
 
         const data = await res.json();
         updateIntegrationUI(data);
     } catch (err) {
-        console.error("Integration status error:", err);
+        console.error("Phase2: integration status error:", err);
     }
 }
 
-/**
- * Update UI based on backend response
- */
-function updateIntegrationUI(status) {
-    if (googleBtn) {
-        applyPlatformUI(
-            googleBtn,
-            status.google_ads?.connected,
-            status.google_ads?.status,
-            "Google Ads"
-        );
-    }
-
-    if (metaBtn) {
-        applyPlatformUI(
-            metaBtn,
-            status.meta_ads?.connected,
-            status.meta_ads?.status,
-            "Meta Ads"
-        );
-    }
-}
+// Expose for openClientModal() call (since it’s inside an IIFE above)
+window.loadIntegrationStatus = loadIntegrationStatus;
 
 /**
- * Apply UI state to a platform button
- */
-function applyPlatformUI(button, connected, status, label) {
-    button.classList.remove("connected", "reconnect");
-
-    if (!connected) {
-        button.textContent = `Connect ${label}`;
-        button.disabled = false;
-        return;
-    }
-
-    if (status === "active") {
-        button.textContent = `${label} Connected ✅`;
-        button.classList.add("connected");
-        button.disabled = true;
-        return;
-    }
-
-    if (status === "disconnected") {
-        button.textContent = `Reconnect ${label} ⚠️`;
-        button.classList.add("reconnect");
-        button.disabled = false;
-    }
-}
-
-/**
- * Listen for OAuth completion messages from popup windows
+ * Listen for OAuth completion messages from popup windows.
+ * NOTE: This assumes your OAuth success page does:
+ * window.opener.postMessage({ type: "SCALEX_OAUTH_DONE", ... }, "<dashboard-origin>");
  */
 window.addEventListener("message", function (event) {
-    // SECURITY: only accept messages from our Ads Connector
-    if (!event.data || event.data.type !== "SCALEX_OAUTH_DONE") return;
+    // Security: accept only from Ads Connector origin
+    if (event.origin !== ADS_CONNECTOR_ORIGIN) return;
 
-    console.log("OAuth completed:", event.data);
+    const msg = event.data;
+    if (!msg || msg.type !== "SCALEX_OAUTH_DONE") return;
 
-    // Refresh integration status immediately
+    // Refresh status immediately (modal can remain open)
     loadIntegrationStatus();
 });
-
 
 
 
