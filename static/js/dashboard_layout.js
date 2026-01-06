@@ -653,6 +653,13 @@ async function exportDashboard(format) {
         // Show modal
         modalBackdrop.classList.remove('hidden');
         document.body.classList.add('client-modal-open');
+
+        /**
+         * ✅ Phase 2: refresh Ads integration status
+         * Hook: when profile popup opens, refresh status
+         * Call this when profile modal becomes visible
+         */
+        loadIntegrationStatus();
     }
 
     /**
@@ -1054,6 +1061,107 @@ document.addEventListener('DOMContentLoaded', () => {
     // if (typeof renderKpiCards === 'function') {
     //     renderKpiCards();
     // }
+});
+
+
+/******************************************************************
+ * Phase 2 – Ads Integrations Status Handling
+ * ---------------------------------------------------------------
+ * - Fetch integration status from backend
+ * - Update Profile popup UI
+ * - Listen for OAuth completion from popup window
+ ******************************************************************/
+
+// CONFIG – update this if backend base URL changes
+const ADS_CONNECTOR_BASE_URL = "https://scalex-ads-connector-ohkoqzgrzq-el.a.run.app"; 
+
+// Client ID (must already be known in dashboard context)
+const SCALEX_CLIENT_ID = document.getElementById('client-id-display').textContent.trim() || "";
+
+// Button elements (adjust IDs if needed)
+const googleBtn = document.getElementById("connect-google-ads");
+const metaBtn = document.getElementById("connect-meta-ads");
+
+/**
+ * Fetch integration status from backend (Phase 2 endpoint)
+ */
+async function loadIntegrationStatus() {
+    try {
+        const url = `${ADS_CONNECTOR_BASE_URL}/api/v1/integrations/status?client_id=${encodeURIComponent(SCALEX_CLIENT_ID)}`;
+        const res = await fetch(url, { credentials: "include" });
+
+        if (!res.ok) {
+            console.warn("Failed to load integrations status");
+            return;
+        }
+
+        const data = await res.json();
+        updateIntegrationUI(data);
+    } catch (err) {
+        console.error("Integration status error:", err);
+    }
+}
+
+/**
+ * Update UI based on backend response
+ */
+function updateIntegrationUI(status) {
+    if (googleBtn) {
+        applyPlatformUI(
+            googleBtn,
+            status.google_ads?.connected,
+            status.google_ads?.status,
+            "Google Ads"
+        );
+    }
+
+    if (metaBtn) {
+        applyPlatformUI(
+            metaBtn,
+            status.meta_ads?.connected,
+            status.meta_ads?.status,
+            "Meta Ads"
+        );
+    }
+}
+
+/**
+ * Apply UI state to a platform button
+ */
+function applyPlatformUI(button, connected, status, label) {
+    button.classList.remove("connected", "reconnect");
+
+    if (!connected) {
+        button.textContent = `Connect ${label}`;
+        button.disabled = false;
+        return;
+    }
+
+    if (status === "active") {
+        button.textContent = `${label} Connected ✅`;
+        button.classList.add("connected");
+        button.disabled = true;
+        return;
+    }
+
+    if (status === "disconnected") {
+        button.textContent = `Reconnect ${label} ⚠️`;
+        button.classList.add("reconnect");
+        button.disabled = false;
+    }
+}
+
+/**
+ * Listen for OAuth completion messages from popup windows
+ */
+window.addEventListener("message", function (event) {
+    // SECURITY: only accept messages from our Ads Connector
+    if (!event.data || event.data.type !== "SCALEX_OAUTH_DONE") return;
+
+    console.log("OAuth completed:", event.data);
+
+    // Refresh integration status immediately
+    loadIntegrationStatus();
 });
 
 
