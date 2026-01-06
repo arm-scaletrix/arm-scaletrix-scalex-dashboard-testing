@@ -706,7 +706,7 @@ async function exportDashboard(format) {
     });
 
     /**
-     * 5.4 - Open OAuth in a popup window (520x720) instead of new tab
+     * 5.4 - Open OAuth in a popup window (700x920) instead of new tab
      * 
      * - Intercepts anchor click
      * - Opens OAuth URL in a small popup
@@ -716,7 +716,7 @@ async function exportDashboard(format) {
         if (!linkEl || !linkEl.href) return null;
 
         // 520x720 popup window
-        const features = "width=520,height=720,noopener,noreferrer";
+        const features = "width=700,height=920,noopener,noreferrer";
         return window.open(linkEl.href, name, features);
     }
 
