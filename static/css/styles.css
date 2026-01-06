@@ -1416,5 +1416,32 @@ body.client-modal-open .layout-container {
     }
 }
 
+/* =========================================================
+   Phase 2 – Ads Integration Button States
+   ========================================================= */
 
+/* Connected state (inactive / informational) */
+button.connected {
+    background-color: #e5e7eb;   /* light grey */
+    color: #6b7280;              /* muted text */
+    border: 1px solid #d1d5db;
+    cursor: not-allowed;
+    opacity: 0.9;
+}
 
+/* Prevent hover effects on connected buttons */
+button.connected:hover {
+    background-color: #e5e7eb;
+    color: #6b7280;
+}
+
+/* Reconnect state (attention required) */
+button.reconnect {
+    background-color: #fef3c7;   /* soft warning yellow */
+    color: #92400e;
+    border: 1px solid #f59e0b;
+}
+
+button.reconnect:hover {
+    background-color: #fde68a;
+}
