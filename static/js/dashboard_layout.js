@@ -705,24 +705,6 @@ async function exportDashboard(format) {
         }
     });
 
-    // Google Ads connect button placeholder
-    if (googleBtn) {
-        googleBtn.addEventListener('click', () => {
-            console.log('TODO: trigger Google Ads OAuth popup for this client');
-            // TODO: Implement Google Ads OAuth flow
-            // Later: redirect to /oauth/google?client_id=...
-        });
-    }
-
-    // Meta Ads connect button placeholder
-    if (metaBtn) {
-        metaBtn.addEventListener('click', () => {
-            console.log('TODO: trigger Meta Ads OAuth popup for this client');
-            // TODO: Implement Meta Ads OAuth flow
-            // Later: redirect to /oauth/meta?client_id=...
-        });
-    }
-
     /**
      * 5.4 - Open OAuth in a popup window (520x720) instead of new tab
      * 
@@ -750,6 +732,7 @@ async function exportDashboard(format) {
 
             e.preventDefault();
             openOAuthPopup(googleLink, "scalex_google_oauth");
+            closeClientModal();
         });
     }
 
@@ -765,6 +748,7 @@ async function exportDashboard(format) {
 
             e.preventDefault();
             openOAuthPopup(metaLink, "scalex_meta_oauth");
+            closeClientModal();
         });
     }
 
