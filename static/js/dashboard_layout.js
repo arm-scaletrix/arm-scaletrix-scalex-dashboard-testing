@@ -713,6 +713,7 @@ async function exportDashboard(format) {
             console.log('TODO: trigger Google Ads OAuth popup for this client');
             // TODO: Implement Google Ads OAuth flow
             // Later: redirect to /oauth/google?client_id=...
+            openOAuthPopupAndPoll(googleLink, "google_ads");
         });
     }
 
@@ -722,6 +723,7 @@ async function exportDashboard(format) {
             console.log('TODO: trigger Meta Ads OAuth popup for this client');
             // TODO: Implement Meta Ads OAuth flow
             // Later: redirect to /oauth/meta?client_id=...
+            openOAuthPopupAndPoll(metaLink, "meta_ads");
         });
     }
 
@@ -1274,7 +1276,7 @@ window.loadIntegrationStatus = loadIntegrationStatus;
  * - Stops when popup closes OR connection becomes active OR timeout hits.
  */
 function startIntegrationPolling(platformKey, popupRef) {
-    const MAX_MS = 60_000;      // stop after 60 seconds
+    const MAX_MS = 120_000;      // stop after 120 seconds
     const INTERVAL_MS = 2000;   // poll every 2 seconds
     const startTs = Date.now();
 
