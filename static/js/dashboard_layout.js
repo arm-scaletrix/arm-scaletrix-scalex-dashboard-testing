@@ -595,8 +595,6 @@ async function exportDashboard(format) {
     const clientIdValueEl = document.getElementById('client-modal-client-id');
     const clientEmailEl = document.getElementById('client-modal-client-email');
 
-    const googleBtn = document.getElementById('google-ads-connect');
-    const metaBtn = document.getElementById('meta-ads-connect');
     const googleLink = document.getElementById('google-ads-link');
     const metaLink = document.getElementById('meta-ads-link');
 
@@ -707,26 +705,23 @@ async function exportDashboard(format) {
         }
     });
 
-    // Google Ads connect button placeholder
-    if (googleBtn) {
-        googleBtn.addEventListener('click', () => {
-            console.log('TODO: trigger Google Ads OAuth popup for this client');
-            // TODO: Implement Google Ads OAuth flow
-            // Later: redirect to /oauth/google?client_id=...
+    // Hybrid OAuth handling for <a> links (works with noopener)
+    if (googleLink && !googleLink.dataset.hybridBound) {
+        googleLink.dataset.hybridBound = "1";
+        googleLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            openOAuthPopupAndPoll(googleLink, "google_ads");
         });
     }
 
-    // Meta Ads connect button placeholder
-    if (metaBtn) {
-        metaBtn.addEventListener('click', () => {
-            console.log('TODO: trigger Meta Ads OAuth popup for this client');
-            // TODO: Implement Meta Ads OAuth flow
-            // Later: redirect to /oauth/meta?client_id=...
+    if (metaLink && !metaLink.dataset.hybridBound) {
+        metaLink.dataset.hybridBound = "1";
+        metaLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            openOAuthPopupAndPoll(metaLink, "meta_ads");
         });
     }
 })();
-
-
 
 
 /* ============================================================================
@@ -1085,12 +1080,6 @@ document.addEventListener('DOMContentLoaded', () => {
  * - Listen for OAuth completion from popup window
  ******************************************************************/
 
-// Backend base URL (Cloud Run)
-const ADS_CONNECTOR_BASE_URL = "https://scalex-ads-connector-ohkoqzgrzq-el.a.run.app";
-
-// Security: only accept postMessage from this origin
-const ADS_CONNECTOR_ORIGIN = new URL(ADS_CONNECTOR_BASE_URL).origin;
-
 function showGlobalLoader() {
     const loaderEl = document.getElementById("loader");
     if (loaderEl) loaderEl.classList.remove("hidden");
@@ -1205,28 +1194,66 @@ async function loadIntegrationStatus() {
 window.loadIntegrationStatus = loadIntegrationStatus;
 
 /**
- * Listen for OAuth completion messages from popup windows.
- * NOTE: This assumes your OAuth success page does:
- * window.opener.postMessage({ type: "SCALEX_OAUTH_DONE", ... }, "<dashboard-origin>");
+ * Phase 2 (Hybrid): Poll integration status only after user starts OAuth.
+ * - Stops when popup closes OR connection becomes active OR timeout hits.
  */
-window.addEventListener("message", function (event) {
-    // Security: accept only from Ads Connector origin
-    console.log("MESSAGE EVENT:", event.origin, event.data);
-    if (event.origin !== ADS_CONNECTOR_ORIGIN) {
-        console.warn("Rejected origin:", event.origin, "expected:", ADS_CONNECTOR_ORIGIN);
-        return;
-    } 
+function startIntegrationPolling(platformKey, popupRef) {
+    const MAX_MS = 60_000;      // stop after 60 seconds
+    const INTERVAL_MS = 2000;   // poll every 2 seconds
+    const startTs = Date.now();
 
-    const msg = event.data;
-    if (!msg || msg.type !== "SCALEX_OAUTH_DONE") {
-        console.warn("Rejected data:", msg);
-        return;
-    }
+    const timer = setInterval(async () => {
+        try {
+            // Stop if popup is gone
+            if (!popupRef || popupRef.closed) {
+                clearInterval(timer);
+                return;
+            }
 
-    // Refresh status immediately (modal can remain open)
-    console.log("Accepted oauth_done message. Refreshing status...");
-    loadIntegrationStatus();
-});
+            // Stop after timeout
+            if (Date.now() - startTs > MAX_MS) {
+                clearInterval(timer);
+                return;
+            }
+
+            // Refresh status from backend
+            await loadIntegrationStatus();
+
+            // If now connected, stop polling + close popup (optional)
+            const el = platformKey === "google_ads"
+                ? document.getElementById("google-ads-link")
+                : document.getElementById("meta-ads-link");
+
+            if (el && el.classList.contains("connected")) {
+                clearInterval(timer);
+
+                // Optional: close popup automatically once connected
+                try { popupRef.close(); } catch (e) {}
+            }
+        } catch (e) {
+            // Keep polling even if one call fails temporarily
+        }
+    }, INTERVAL_MS);
+}
+
+/**
+ * Opens OAuth popup and starts polling.
+ * Works even when rel="noopener noreferrer" is present, because we are not using window.opener.
+ */
+function openOAuthPopupAndPoll(linkEl, platformKey) {
+    if (!linkEl || !linkEl.href) return;
+
+    // If already connected, do nothing
+    if (linkEl.classList.contains("connected")) return;
+
+    // Open a popup window (you can tune width/height)
+    const features = "width=520,height=720,noopener,noreferrer";
+    const name = platformKey === "google_ads" ? "scalex_google_oauth" : "scalex_meta_oauth";
+    const popup = window.open(linkEl.href, name, features);
+
+    // Start polling while popup is open
+    startIntegrationPolling(platformKey, popup);
+}
 
 
 
