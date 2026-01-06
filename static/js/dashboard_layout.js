@@ -659,21 +659,19 @@ async function exportDashboard(format) {
          * Hook: when profile popup opens, refresh status
          * Call this when profile modal becomes visible
          */
-        // Show loader first
-        showGlobalLoader();
-
-        try {
-            // Fetch + update UI BEFORE opening the modal
-            // loadIntegrationStatus is async already
-            await window.loadIntegrationStatus();
-        } catch (err) {
-            console.error("Phase2: loadIntegrationStatus failed:", err);
-            // Optional: you can still open modal even if status fails
-        } finally {
-            // Hide loader
-            hideGlobalLoader();
+        // Show loader while we fetch the latest connection state
+        if (typeof showGlobalLoader === 'function') {
+            showGlobalLoader();
         }
 
+        // IMPORTANT: do not block modal opening; refresh status asynchronously
+        Promise.resolve(loadIntegrationStatus())
+            .catch((err) => console.error("Phase2: loadIntegrationStatus failed:", err))
+            .finally(() => {
+                if (typeof hideGlobalLoader === 'function') {
+                    hideGlobalLoader();
+                }
+            });
     }
 
     /**
@@ -724,9 +722,53 @@ async function exportDashboard(format) {
             // Later: redirect to /oauth/meta?client_id=...
         });
     }
+
+    /**
+     * 5.4 - Open OAuth in a popup window (520x720) instead of new tab
+     * 
+     * - Intercepts anchor click
+     * - Opens OAuth URL in a small popup
+     * - Prevents default navigation (no new tab)
+     */
+    function openOAuthPopup(linkEl, name) {
+        if (!linkEl || !linkEl.href) return null;
+
+        // 520x720 popup window
+        const features = "width=520,height=720,noopener,noreferrer";
+        return window.open(linkEl.href, name, features);
+    }
+
+    // Google anchor -> popup
+    if (googleLink && !googleLink.dataset.popupBound) {
+        googleLink.dataset.popupBound = "1";
+        googleLink.addEventListener("click", (e) => {
+            // If already connected, block navigation completely
+            if (googleLink.classList.contains("connected")) {
+                e.preventDefault();
+                return;
+            }
+
+            e.preventDefault();
+            openOAuthPopup(googleLink, "scalex_google_oauth");
+        });
+    }
+
+    // Meta anchor -> popup
+    if (metaLink && !metaLink.dataset.popupBound) {
+        metaLink.dataset.popupBound = "1";
+        metaLink.addEventListener("click", (e) => {
+            // If already connected, block navigation completely
+            if (metaLink.classList.contains("connected")) {
+                e.preventDefault();
+                return;
+            }
+
+            e.preventDefault();
+            openOAuthPopup(metaLink, "scalex_meta_oauth");
+        });
+    }
+
 })();
-
-
 
 
 /* ============================================================================
