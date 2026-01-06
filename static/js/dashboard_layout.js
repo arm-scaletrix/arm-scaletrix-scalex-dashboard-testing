@@ -650,16 +650,17 @@ async function exportDashboard(format) {
             }
         }
 
-        // Show modal
-        modalBackdrop.classList.remove('hidden');
-        document.body.classList.add('client-modal-open');
-
         /**
          * ✅ Phase 2: refresh Ads integration status
          * Hook: when profile popup opens, refresh status
          * Call this when profile modal becomes visible
          */
         loadIntegrationStatus();
+        
+        // Show modal
+        modalBackdrop.classList.remove('hidden');
+        document.body.classList.add('client-modal-open');
+
     }
 
     /**
