@@ -616,7 +616,7 @@ async function exportDashboard(format) {
      * @function
      * @returns {void}
      */
-    function openClientModal() {
+    async function openClientModal() {
         // Read client ID from header element
         const rawText = clientIdDisplay.textContent || '';
         const cleanedClientId = rawText.trim();
@@ -651,12 +651,25 @@ async function exportDashboard(format) {
         }
 
         /**
-         * ✅ Phase 2: refresh Ads integration status
+         * Phase 2: refresh Ads integration status
          * Hook: when profile popup opens, refresh status
          * Call this when profile modal becomes visible
          */
-        loadIntegrationStatus();
-        
+        // Show loader first
+        showGlobalLoader();
+
+        try {
+            // Fetch + update UI BEFORE opening the modal
+            // loadIntegrationStatus is async already
+            await window.loadIntegrationStatus();
+        } catch (err) {
+            console.error("Phase2: loadIntegrationStatus failed:", err);
+            // Optional: you can still open modal even if status fails
+        } finally {
+            // Hide loader
+            hideGlobalLoader();
+        }
+
         // Show modal
         modalBackdrop.classList.remove('hidden');
         document.body.classList.add('client-modal-open');
@@ -1077,6 +1090,16 @@ const ADS_CONNECTOR_BASE_URL = "https://scalex-ads-connector-ohkoqzgrzq-el.a.run
 
 // Security: only accept postMessage from this origin
 const ADS_CONNECTOR_ORIGIN = new URL(ADS_CONNECTOR_BASE_URL).origin;
+
+function showGlobalLoader() {
+    const loaderEl = document.getElementById("loader");
+    if (loaderEl) loaderEl.classList.remove("hidden");
+}
+
+function hideGlobalLoader() {
+    const loaderEl = document.getElementById("loader");
+    if (loaderEl) loaderEl.classList.add("hidden");
+}
 
 /**
  * Get the active client_id.
